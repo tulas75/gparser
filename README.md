@@ -1,5 +1,5 @@
 # gparser
-Flask app for parsing documents,audio and videos, using openparse, embeddings and vector db
+Flask app for parsing documents,audio and videos, using [openparse](https://github.com/Filimoa/open-parse), [InfinityEmbeddings](https://github.com/michaelfeil/infinity) and [Pinecone](https://www.pinecone.io)
 # Document Processing and Vectorization System
 
 A comprehensive system for processing, parsing, and vectorizing various document types including PDFs, images, audio, and video files. The system consists of a Flask API backend and a Streamlit web interface for easy file uploads. It extracts content, processes it, and stores both the files and their vector embeddings for later retrieval.

@@ -1,0 +1,11 @@
+openparse
+boto3
+flask
+python-magic
+python-dotenv
+langchain
+langchain-community
+langchain_pinecone
+moviepy
+openai
+pillow

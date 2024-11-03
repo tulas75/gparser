@@ -1,17 +1,19 @@
 # gparser
 Flask app for parsing documents,audio and videos, using openparse, embeddings and vector db
-# Document Processing and Vectorization API
+# Document Processing and Vectorization System
 
-A Flask-based API for processing, parsing, and vectorizing various document types including PDFs, images, audio, and video files. The system extracts content, processes it, and stores both the files and their vector embeddings for later retrieval.
+A comprehensive system for processing, parsing, and vectorizing various document types including PDFs, images, audio, and video files. The system consists of a Flask API backend and a Streamlit web interface for easy file uploads. It extracts content, processes it, and stores both the files and their vector embeddings for later retrieval.
 
 ## Features
 
+- User-friendly Streamlit web interface for file uploads
 - Multi-format document processing (PDF, Audio, Video, Images)
 - Automatic text extraction and processing
 - Image description generation using AI
 - Vector embeddings generation and storage
 - S3-compatible storage integration
 - Pinecone vector database integration
+- Real-time upload status and feedback
 
 ## System Requirements
 
@@ -90,12 +92,21 @@ Uploads and processes a file, storing both the file and its vector embeddings.
 
 ## Usage
 
-1. Start the Flask server:
+1. Start the Flask API server:
 ```bash
 python main.py
 ```
 
-2. Send files for processing:
+2. Start the Streamlit web interface:
+```bash
+streamlit run app.py
+```
+
+3. Open your browser and navigate to the Streamlit interface (typically http://localhost:8501)
+
+4. Upload files through the web interface
+
+Alternatively, you can use the API directly:
 ```bash
 curl -X POST -F "file=@/path/to/your/file" http://localhost:5000/upload
 ```
@@ -113,7 +124,8 @@ The API includes comprehensive error handling for:
 ### Project Structure
 ```
 gparser/
-├── main.py           # Flask application entry point
+├── main.py           # Flask API server
+├── app.py            # Streamlit web interface
 ├── parsers.py        # File parsing logic
 ├── vectemb.py        # Vector embedding handling
 ├── s3.py            # S3 storage integration

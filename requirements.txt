@@ -6,6 +6,7 @@ python-dotenv
 langchain
 langchain-community
 langchain_pinecone
+langchain-postgres
 moviepy
 openai
 pillow

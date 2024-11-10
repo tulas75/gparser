@@ -1,21 +1,20 @@
-from openai import OpenAI
 import magic
 import openparse
 import os
+
 import json
 import uuid
 import base64
 from coordinates import normalize_coordinates
 import tempfile
 import base64
-from imgs import describe_image,describe_image_di,describe_image_oai
+from imgs import describe_image,describe_image_oai
 from s3 import upload_file_to_s3
 from moviepy.editor import VideoFileClip
 from langchain_core.documents import Document
 from vectemb import get_vector_store_pg
+from whisper import whisper_parse
 
-#FIREWORKS_API_KEY = os.environ['FIREWORKS_API_KEY']
-DEEPINFRA_API_KEY= os.environ['DEEPINFRA_API_KEY']
 def parse_pdf(file_path,s3_file_name):
     """Parse PDF file and extract text"""
     try:
@@ -181,17 +180,19 @@ def parse_audio(file_path,s3_file_name):
     """Parse audio file and extract metadata"""
     try:
         url = s3_file_name
+        filename = os.path.basename(file_path)
         #client = OpenAI(base_url="https://api.fireworks.ai/inference/v1", api_key=FIREWORKS_API_KEY)
-        client = OpenAI(base_url="http://192.168.1.8:8000/v1", api_key=FIREWORKS_API_KEY)
-        audio_file = open(file_path, "rb")
-        transcription = client.audio.transcriptions.create(
-          model="whisper-v3", 
-          file=audio_file, 
-          response_format="verbose_json"
-        )
+        #client = OpenAI(base_url="https://api.deepinfra.com/v1/inference/openai", api_key=DEEPINFRA_API_KEY)
+        #audio_file = open(file_path, "rb")
+        #transcription = client.audio.transcriptions.create(
+        #  model="whisper-v3", 
+        #  file=audio_file, 
+        #  response_format="verbose_json"
+        #)
+        
         
         # Process the transcription JSON
-        transcription_data = json.loads(transcription.json())
+        transcription_data = whisper_parse(file_path)
         segments = transcription_data['segments']
         grouped_segments = []
         group_text = []
@@ -225,7 +226,7 @@ def parse_audio(file_path,s3_file_name):
                 doc = Document(
                     page_content=aggregated_text,
                     metadata={
-                        "source": s3_file_name,
+                        "source": filename,
                         "start_time": group_timestamps['from'],
                         "end_time": group_timestamps['to'],
                         "url": url,
@@ -247,7 +248,7 @@ def parse_audio(file_path,s3_file_name):
 
         # Add to vector store
         try:
-            vector_store = get_vector_store(namespace="audio", index_name="langchain-test-index")
+            vector_store = get_vector_store_pg(db="langchain", collection_name="audio")
             vector_store.add_documents(documents=documents, ids=uuids)
             print("Audio transcription chunks successfully added to the vector store.")
         except Exception as e:
@@ -268,19 +269,9 @@ def parse_video(file_path,s3_file_name):
             video.audio.write_audiofile(temp_audio_path)
         
         try:
-            # Use the existing audio parsing logic
+            # Use whisper_parse for video audio just like we do for audio files
             url = s3_file_name
-            client = OpenAI(base_url="http://192.168.1.8:8000/v1", api_key=FIREWORKS_API_KEY)
-            
-            audio_file = open(temp_audio_path, "rb")
-            transcription = client.audio.transcriptions.create(
-                model="whisper-v3",
-                file=audio_file,
-                response_format="verbose_json"
-            )
-            
-            # Process the transcription JSON
-            transcription_data = json.loads(transcription.json())
+            transcription_data = whisper_parse(temp_audio_path)
             segments = transcription_data['segments']
             grouped_segments = []
             group_text = []
@@ -337,7 +328,7 @@ def parse_video(file_path,s3_file_name):
             # Add to vector store
             try:
                 #vector_store = get_vector_store(namespace="video", index_name="langchain-test-index")
-                vector_store = get_vector_store_pg(db="langchain", collection_name="langchain-test-index")
+                vector_store = get_vector_store_pg(db="langchain", collection_name="video")
                 vector_store.add_documents(documents=documents, ids=uuids)
                 print("Video transcription chunks successfully added to the vector store.")
             except Exception as e:
@@ -345,7 +336,6 @@ def parse_video(file_path,s3_file_name):
                 
         finally:
             # Clean up
-            audio_file.close()
             os.unlink(temp_audio_path)
             video.close()
             

@@ -41,30 +41,6 @@ def describe_image(file_path):
     )
     return chat_completion.choices[0].message.content
 
-def describe_image_di(file_path):
-    # Path to your image
-    image_path = file_path
-
-    # Getting the base64 string
-    base64_image = encode_image(image_path)
-    chat = ChatDeepInfra(model="meta-llama/Llama-3.2-11B-Vision-Instruct",deepinfra_api_token=os.environ['DEEPINFRA_API_KEY'])
-    messages=[
-           {
-               "role": "user",
-               "content": [
-                   {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/jpeg;base64,{base64_image}",
-                        },
-                   },
-                   {"type": "text", "text": "What's in this image?"},
-               ],
-           }
-    ],
-    model="meta-llama/Llama-3.2-11B-Vision-Instruct",
-    return chat.invoke(messages)
-
 def describe_image_oai(file_path):
     # Path to your image
     image_path = file_path

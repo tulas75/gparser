@@ -8,14 +8,14 @@ import base64
 from coordinates import normalize_coordinates
 import tempfile
 import base64
-from imgs import describe_image
+from imgs import describe_image,describe_image_di,describe_image_oai
 from s3 import upload_file_to_s3
 from moviepy.editor import VideoFileClip
 from langchain_core.documents import Document
-from vectemb import get_vector_store
+from vectemb import get_vector_store_pg
 
-FIREWORKS_API_KEY = os.environ['FIREWORKS_API_KEY']
-
+#FIREWORKS_API_KEY = os.environ['FIREWORKS_API_KEY']
+DEEPINFRA_API_KEY= os.environ['DEEPINFRA_API_KEY']
 def parse_pdf(file_path,s3_file_name):
     """Parse PDF file and extract text"""
     try:
@@ -136,7 +136,7 @@ def parse_pdf(file_path,s3_file_name):
                     # Get image description
                     try:
                         print(f"Attempting to describe image...")
-                        image_description = describe_image(temp_image_path)
+                        image_description = describe_image_oai(temp_image_path)
                         print(f"Got description: {image_description[:100]}...")
                         
                         # Upload image to S3 if description was successful
@@ -168,7 +168,8 @@ def parse_pdf(file_path,s3_file_name):
 
         # Add error handling
         try:
-            vector_store = get_vector_store(namespace="testino",index_name="langchain-test-index")
+            #vector_store = get_vector_store(namespace="testino",index_name="langchain-test-index")
+            vector_store = get_vector_store_pg(db="langchain", collection_name="dino")
             vector_store.add_documents(documents=documents, ids=uuids)
             print("Documents successfully added to the vector store.")
         except Exception as e:
@@ -335,7 +336,8 @@ def parse_video(file_path,s3_file_name):
 
             # Add to vector store
             try:
-                vector_store = get_vector_store(namespace="video", index_name="langchain-test-index")
+                #vector_store = get_vector_store(namespace="video", index_name="langchain-test-index")
+                vector_store = get_vector_store_pg(db="langchain", collection_name="langchain-test-index")
                 vector_store.add_documents(documents=documents, ids=uuids)
                 print("Video transcription chunks successfully added to the vector store.")
             except Exception as e:

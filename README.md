@@ -1,5 +1,5 @@
 # gparser
-Flask app for parsing documents,audio and videos, using [openparse](https://github.com/Filimoa/open-parse), [InfinityEmbeddings](https://github.com/michaelfeil/infinity), [openedai-whisper](https://github.com/matatonic/openedai-whisper), [AWS S3](https://aws.amazon.com/s3) and [Pinecone](https://www.pinecone.io) / [PGVector](https://github.com/pgvector/pgvector)
+Flask app for parsing documents,audio and videos, using [openparse](https://github.com/Filimoa/open-parse), [InfinityEmbeddings](https://github.com/michaelfeil/infinity) / [Deepinfra Embeddings](https://deepinfra.com/models/embeddings/), [openedai-whisper](https://github.com/matatonic/openedai-whisper), [AWS S3](https://aws.amazon.com/s3) and [Pinecone](https://www.pinecone.io) / [PGVector](https://github.com/pgvector/pgvector)
 # Document Processing and Vectorization System
 
 A comprehensive system for processing, parsing, and vectorizing various document types including PDFs, images, audio, and video files. The system consists of a Flask API backend and a Streamlit web interface for easy file uploads. It extracts content, processes it, and stores both the files and their vector embeddings for later retrieval.

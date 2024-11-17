@@ -10,17 +10,17 @@ from dotenv import load_dotenv
 
 load_dotenv()  # Load environment variables from .env file
 
-embeddings = InfinityEmbeddings(
-    model="BAAI/bge-m3",
-    infinity_api_url="http://192.168.1.8:7997",
-)
-
-#embeddings = DeepInfraEmbeddings(
-#    model_id="BAAI/bge-m3",
-##    query_instruction="",
-#    embed_instruction="",
-#    deepinfra_api_token=os.environ['DEEPINFRA_API_KEY']
+#embeddings = InfinityEmbeddings(
+#    model="BAAI/bge-m3",
+#    infinity_api_url="http://192.168.1.8:7997",
 #)
+
+embeddings = DeepInfraEmbeddings(
+    model_id="BAAI/bge-m3",
+    query_instruction="",
+    embed_instruction="",
+    deepinfra_api_token=os.environ['DEEPINFRA_API_KEY']
+)
 
 def get_vector_store(index_name, namespace):
     """
@@ -36,7 +36,7 @@ def get_vector_store(index_name, namespace):
     
     return PineconeVectorStore(index=index, embedding=embeddings, namespace=namespace)
 
-def get_vector_store_pg(db,collection_name):
+def get_vector_store_pg(pgdb, collection_name, pghost, pgpwd, pguser, pgport):
     """
     Create and return a PgVectorStore instance
     Args:
@@ -45,6 +45,6 @@ def get_vector_store_pg(db,collection_name):
     Returns:
         PgVectorStore: Configured vector store instance
     """
-    connection = "postgresql+psycopg://langchain:langchain@localhost:6024/"+db  # Uses psycopg3!
+    connection = f"postgresql+psycopg://{pguser}:{pgpwd}@{pghost}:{pgport}/{pgdb}"  # Uses psycopg3!
     collection_name = collection_name
     return PGVector(connection=connection, collection_name=collection_name, embeddings=embeddings, use_jsonb=True)

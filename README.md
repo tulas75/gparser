@@ -43,7 +43,7 @@ S3_BUCKET=your_bucket_name
 S3_ENDPOINT=your_endpoint
 PINECONE_API_KEY=your_pinecone_key
 FIREWORKS_API_KEY=your_fireworks_key
-GROQ_API_KEY=your_groq_key
+DEEPINFRA_API_KEY=your_deepinfra_key
 ```
 
 ## API Endpoints
@@ -73,8 +73,8 @@ Uploads and processes a file, storing both the file and its vector embeddings.
 - Image processing and description
 
 ### 2. Vector Embeddings (vectemb.py)
-- Generates embeddings using InfinityEmbeddings
-- Stores vectors in Pinecone database
+- Generates embeddings using InfinityEmbeddings / DeepInfra Embeddings
+- Stores vectors in Pinecone / PGVector database
 - Manages namespaces for different content types
 
 ### 3. S3 Storage (s3.py)
@@ -84,7 +84,7 @@ Uploads and processes a file, storing both the file and its vector embeddings.
 ### 4. Image Processing (imgs.py)
 - Generates image descriptions using AI
 - Handles base64 encoding/decoding
-- Integrates with Groq API for image analysis
+- Integrates with DeepInfra API for image analysis
 
 ### 5. Coordinate Processing (coordinates.py)
 - Normalizes PDF coordinates

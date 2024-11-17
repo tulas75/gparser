@@ -1,149 +1,58 @@
 import magic
+import os
 import openparse
 import os
-
 import json
 import uuid
 import base64
 from coordinates import normalize_coordinates
 import tempfile
-import base64
 from imgs import describe_image,describe_image_oai
 from s3 import upload_file_to_s3
+from pdf_helpers import handle_text_content, handle_image_content, process_mixed_variant
 from moviepy.editor import VideoFileClip
 from langchain_core.documents import Document
 from vectemb import get_vector_store_pg
 from whisper import whisper_parse
 
-def parse_pdf(file_path,s3_file_name):
-    """Parse PDF file and extract text"""
+def parse_pdf(file_path, s3_file_name):
+    """Parse PDF file and extract text, images, and mixed content"""
     try:
-        temp_file = file_path
         filename = os.path.basename(file_path)
-
+        processed_chunks = []
         parser = openparse.DocumentParser(
-             table_args={
-             "parsing_algorithm": "pymupdf",
-             "table_output_format": "markdown"
-             }
+            table_args={
+                "parsing_algorithm": "pymupdf",
+                "table_output_format": "markdown"
+            }
         )
-        parsed_basic_doc = parser.parse(temp_file)
-
+        parsed_basic_doc = parser.parse(file_path)
         print('Number of chunks:', len(parsed_basic_doc.nodes))
-        chunks = parsed_basic_doc.model_dump_json()
-        chunks = json.loads(chunks)
-
+        
+        chunks = json.loads(parsed_basic_doc.model_dump_json())
         documents = []
         uuids = []
 
-        # Iterate over the nodes and create Document objects and UUIDs
-        for i, node in enumerate (chunks['nodes'], start=0):
+        for i, node in enumerate(chunks['nodes'], start=0):
             variant = node['variant']
-            url = s3_file_name 
-            document_name = f"document_{i}"
+            url = s3_file_name
             bbox_list = node['bbox']
-            for bbox in bbox_list:
-                page = bbox['page']
-                
-            if variant == ['text'] or variant == ['table', 'text']:
-                doc = Document(
-                    page_content=node['text'],
-                    metadata={
-                        "source": filename,
-                        "tokens": node['tokens'],
-                        "page": page,
-                        "url": url,
-                        "mimetype": "application/pdf",
-                    },
-                )
+            page = bbox_list[0]['page'] if bbox_list else 0
+            node_uuid = node['node_id']
+
+            print(f"Processing node {i} with variant: {variant}")
+
+            # Handle pure text or table+text variants
+            if set(variant).issubset({'text', 'table'}):
+                doc = handle_text_content(node, filename, url, page)
                 documents.append(doc)
-                uuids.append(node['node_id'])
-            elif 'image' in variant:
-                # Extract and save the image temporarily
-                temp_image_path = os.path.join("temp_uploads", f"{node['node_id']}.jpeg")
+                uuids.append(node_uuid)
+                
+            # Handle pure image variant
+            elif variant == ['image']:
                 try:
-                    print(f"\nProcessing image node at index {i}")
-                    print(f"Node variant: {variant}")
-                    print(f"Node keys: {node.keys()}")
-                    
-                    if 'images' not in node or not node['images']:
-                        print(f"No valid images in node at index {i}")
-                        continue
-                    
-                    # Process each image in the node
-                    for image_dict in node['images']:
-                        if not isinstance(image_dict, dict):
-                            print(f"Invalid image dictionary in node at index {i}")
-                            continue
-                            
-                        raw_image = image_dict.get('image') or image_dict.get('data')
-                        if not raw_image:
-                            print(f"No image data found in dictionary")
-                            continue
-
-                        # Ensure temp_uploads directory exists
-                        os.makedirs("temp_uploads", exist_ok=True)
-
-                        try:
-                            # Handle base64 data
-                            if isinstance(raw_image, bytes):
-                                image_data = raw_image
-                            elif isinstance(raw_image, str):
-                                if raw_image.startswith(('data:image/', 'iVBOR', '/9j/')):
-                                    # Remove headers if present
-                                    if ',' in raw_image:
-                                        raw_image = raw_image.split(',', 1)[1]
-                                # Try direct base64 decode
-                                image_data = base64.b64decode(raw_image)
-                            else:
-                                print(f"Unsupported image data type: {type(raw_image)}")
-                                continue
-
-                            # Verify we have actual image data
-                            if len(image_data) == 0:
-                                print("Empty image data received")
-                                continue
-
-                            with open(temp_image_path, 'wb') as f:
-                                f.write(image_data)
-                                f.flush()
-                                os.fsync(f.fileno())  # Ensure data is written to disk
-
-                            # Verify the file was created and has content
-                            if os.path.exists(temp_image_path):
-                                file_size = os.path.getsize(temp_image_path)
-                                if file_size > 0:
-                                    print(f"Successfully saved image to {temp_image_path}")
-                                    print(f"Image file size: {file_size} bytes")
-                                else:
-                                    print("Image file was created but is empty")
-                                    continue
-                            else:
-                                print("Failed to create image file")
-                                continue
-
-                        except base64.binascii.Error as e:
-                            print(f"Failed to decode base64 data: {str(e)}")
-                            continue
-                        except AttributeError as e:
-                            print(f"Failed to save image from node: {str(e)}")
-                            continue
-                        except Exception as e:
-                            print(f"Unexpected error saving image: {str(e)}")
-                            continue
-                        
-                    # Get image description
-                    try:
-                        print(f"Attempting to describe image...")
-                        image_description = describe_image_oai(temp_image_path)
-                        print(f"Got description: {image_description[:100]}...")
-                        
-                        # Upload image to S3 if description was successful
-                        s3_image_path = f"images/{node['node_id']}.jpeg"
-                        with open(temp_image_path, 'rb') as img_file:
-                            upload_file_to_s3(img_file, s3_image_path)
-                        print(f"Successfully uploaded image to S3: {s3_image_path}")
-                        
+                    image_description, s3_path = handle_image_content(node, filename, url, page)
+                    if image_description and s3_path:
                         doc = Document(
                             page_content=image_description,
                             metadata={
@@ -151,28 +60,56 @@ def parse_pdf(file_path,s3_file_name):
                                 "page": page,
                                 "url": url,
                                 "mimetype": "image/",
-                                "image_url": s3_image_path
-                            },
+                                "image_url": s3_path
+                            }
                         )
                         documents.append(doc)
-                        uuids.append(node['node_id'])
-                    except Exception as e:
-                        print(f"Failed to describe image in {filename} at index {i}: {str(e)}")
-                        continue
-                finally:
-                    # Clean up temporary image file
-                    if os.path.exists(temp_image_path):
-                        os.remove(temp_image_path)
-            print(f"{variant} {node['node_id']} {document_name}")
+                        uuids.append(node_uuid)
+                except Exception as e:
+                    print(f"Failed to process image node {i}: {str(e)}")
+                    
+            # Handle mixed variants (text+image, image+text, etc)
+            elif set(variant).intersection({'text', 'image'}):
+                try:
+                    mixed_docs = process_mixed_variant(node, filename, url, page)
+                    for doc in mixed_docs:
+                        documents.append(doc)
+                        uuids.append(f"{node_uuid}_{len(uuids)}")
+                except Exception as e:
+                    print(f"Failed to process mixed variant node {i}: {str(e)}")
+            
+            print(f"Processed variant {variant} for node {node_uuid}")
 
         # Add error handling
         try:
             #vector_store = get_vector_store(namespace="testino",index_name="langchain-test-index")
-            vector_store = get_vector_store_pg(db="langchain", collection_name="dino")
+            vector_store = get_vector_store_pg(
+                pgdb=os.environ['PGDB'], 
+                collection_name=os.environ['COLLECTION_NAME'],
+                pghost=os.environ['PGHOST'],
+                pgpwd=os.environ['PGPWD'],
+                pguser=os.environ['PGUSER'],
+                pgport=os.environ['PGPORT']
+            )
             vector_store.add_documents(documents=documents, ids=uuids)
             print("Documents successfully added to the vector store.")
+            
+            # Prepare chunks info for return
+            for doc in documents:
+                chunk_info = {
+                    'token_count': len(doc.page_content.split()),  # Approximate token count
+                    'mimetype': doc.metadata.get('mimetype', 'N/A'),
+                    'source': doc.metadata.get('source', 'N/A'),
+                    'page': doc.metadata.get('page', 'N/A'),
+                    'url': doc.metadata.get('url', 'N/A'),
+                    'image_url': doc.metadata.get('image_url', None)
+                }
+                processed_chunks.append(chunk_info)
+                
         except Exception as e:
             print(f"An error occurred while adding documents: {str(e)}")
+            
+        return processed_chunks
     except Exception as e:
         raise Exception(f"Failed to parse PDF: {str(e)}")
     
@@ -181,15 +118,6 @@ def parse_audio(file_path,s3_file_name):
     try:
         url = s3_file_name
         filename = os.path.basename(file_path)
-        #client = OpenAI(base_url="https://api.fireworks.ai/inference/v1", api_key=FIREWORKS_API_KEY)
-        #client = OpenAI(base_url="https://api.deepinfra.com/v1/inference/openai", api_key=DEEPINFRA_API_KEY)
-        #audio_file = open(file_path, "rb")
-        #transcription = client.audio.transcriptions.create(
-        #  model="whisper-v3", 
-        #  file=audio_file, 
-        #  response_format="verbose_json"
-        #)
-        
         
         # Process the transcription JSON
         transcription_data = whisper_parse(file_path)
@@ -248,7 +176,14 @@ def parse_audio(file_path,s3_file_name):
 
         # Add to vector store
         try:
-            vector_store = get_vector_store_pg(db="langchain", collection_name="audio")
+            vector_store = get_vector_store_pg(
+                pgdb=os.environ['PGDB'], 
+                collection_name=os.environ['COLLECTION_NAME'],
+                pghost=os.environ['PGHOST'],
+                pgpwd=os.environ['PGPWD'],
+                pguser=os.environ['PGUSER'],
+                pgport=os.environ['PGPORT']
+            )
             vector_store.add_documents(documents=documents, ids=uuids)
             print("Audio transcription chunks successfully added to the vector store.")
         except Exception as e:
@@ -328,7 +263,14 @@ def parse_video(file_path,s3_file_name):
             # Add to vector store
             try:
                 #vector_store = get_vector_store(namespace="video", index_name="langchain-test-index")
-                vector_store = get_vector_store_pg(db="langchain", collection_name="video")
+                vector_store = get_vector_store_pg(
+                    pgdb=os.environ['PGDB'], 
+                    collection_name=os.environ['COLLECTION_NAME'],
+                    pghost=os.environ['PGHOST'],
+                    pgpwd=os.environ['PGPWD'],
+                    pguser=os.environ['PGUSER'],
+                    pgport=os.environ['PGPORT']
+                )
                 vector_store.add_documents(documents=documents, ids=uuids)
                 print("Video transcription chunks successfully added to the vector store.")
             except Exception as e:
@@ -342,28 +284,78 @@ def parse_video(file_path,s3_file_name):
     except Exception as e:
         raise Exception(f"Failed to parse video: {str(e)}")
 
-def parse_image(file_path):
+def parse_image(file_path,s3_file_name):
     """Parse image file and extract metadata"""
     try:
-        print(file_path)
-        # Here you could add image processing logic
-        # For example: extract EXIF data, run OCR, etc.
+        url = s3_file_name
+        filename = os.path.basename(file_path)
+        
+        # Get image description
+        try:
+            print(f"Attempting to describe image...")
+            image_description = describe_image_oai(file_path)
+            print(f"Got description: {image_description[:100]}...")
+            
+            # Create Document object
+            doc = Document(
+                page_content=image_description,
+                metadata={
+                    "source": filename,
+                    "url": url,
+                    "mimetype": "image/",
+                    "image_url": s3_file_name
+                },
+            )
+            
+            # Generate UUID for the document
+            doc_uuid = str(uuid.uuid4())
+            
+            # Add to vector store
+            try:
+                vector_store = get_vector_store_pg(
+                    pgdb=os.environ['PGDB'], 
+                    collection_name=os.environ['COLLECTION_NAME'],
+                    pghost=os.environ['PGHOST'],
+                    pgpwd=os.environ['PGPWD'],
+                    pguser=os.environ['PGUSER'],
+                    pgport=os.environ['PGPORT']
+                )
+                vector_store.add_documents(documents=[doc], ids=[doc_uuid])
+                print("Image description successfully added to the vector store.")
+            except Exception as e:
+                print(f"An error occurred while adding image description: {str(e)}")
+                
+        except Exception as e:
+            print(f"Failed to process image {filename}: {str(e)}")
+            raise
+            
     except Exception as e:
         raise Exception(f"Failed to parse image: {str(e)}")
 
 def parse_file(file_path,s3_file_name):
     """Main parsing function that determines file type and calls appropriate parser"""
-    mime_type = magic.from_file(file_path, mime=True)
-    s3_file_name = s3_file_name    
-    if mime_type == 'application/pdf':
-        parse_pdf(file_path,s3_file_name)
-    elif mime_type.startswith('audio/'):
-        parse_audio(file_path,s3_file_name)
-    elif mime_type.startswith('video/'):
-        parse_video(file_path,s3_file_name)
-    elif mime_type in ['image/jpeg', 'image/png', 'image/jpg']:
-        parse_image(file_path)
-    else:
-        raise Exception(f"Unsupported file type: {mime_type}")
+    chunks = []
+    try:
+        mime_type = str(magic.from_file(file_path, mime=True))
+        s3_file_name = s3_file_name
         
-    return mime_type
+        if mime_type == 'application/pdf':
+            chunks = parse_pdf(file_path, s3_file_name)
+        elif isinstance(mime_type, str) and mime_type.startswith('audio/'):
+            chunks = parse_audio(file_path, s3_file_name)
+        elif isinstance(mime_type, str) and mime_type.startswith('video/'):
+            chunks = parse_video(file_path, s3_file_name)
+        elif mime_type in ['image/jpeg', 'image/png', 'image/jpg']:
+            chunks = parse_image(file_path, s3_file_name)
+        else:
+            raise Exception(f"Unsupported file type: {mime_type}")
+            
+    except Exception as e:
+        print(f"Error parsing file: {str(e)}")
+        mime_type = "unknown"
+        
+    # Ensure chunks is a list, even if empty
+    if chunks is None:
+        chunks = []
+    
+    return {"mime_type": mime_type, "chunks": chunks}

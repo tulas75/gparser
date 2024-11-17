@@ -44,6 +44,12 @@ S3_ENDPOINT=your_endpoint
 PINECONE_API_KEY=your_pinecone_key
 FIREWORKS_API_KEY=your_fireworks_key
 DEEPINFRA_API_KEY=your_deepinfra_key
+PGUSER=pguser
+PGPWD=pgpwd
+PGHOST=pghost
+PGDB=pgdb
+PGPORT=5432
+COLLECTION_NAME=collection_name
 ```
 
 ## API Endpoints

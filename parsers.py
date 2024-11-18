@@ -119,6 +119,7 @@ def parse_audio(file_path,s3_file_name):
     try:
         url = s3_file_name
         filename = os.path.basename(file_path)
+        processed_chunks = []
         
         # Process the transcription JSON
         transcription_data = whisper_parse(file_path)
@@ -157,7 +158,6 @@ def parse_audio(file_path,s3_file_name):
                     metadata={
                         "source": filename,
                         "start_time": group_timestamps['from'],
-                        "end_time": group_timestamps['to'],
                         "url": url,
                         "mimetype": "audio/",
                     }
@@ -187,8 +187,22 @@ def parse_audio(file_path,s3_file_name):
             )
             vector_store.add_documents(documents=documents, ids=uuids)
             print("Audio transcription chunks successfully added to the vector store.")
+            # Prepare chunks info for return
+            for doc in documents:
+                chunk_info = {
+                    'token_count': len(doc.page_content.split()),  # Approximate token count
+                    'mimetype': doc.metadata.get('mimetype', 'N/A'),
+                    'source': doc.metadata.get('source', 'N/A'),
+                    'url': doc.metadata.get('url', 'N/A'),
+                    'start_time': doc.metadata.get('start_time','N/A'),
+                    'vectorized': True
+                }
+                processed_chunks.append(chunk_info)
+
         except Exception as e:
             print(f"An error occurred while adding audio chunks: {str(e)}")
+            
+        return processed_chunks
             
     except Exception as e:
         raise Exception(f"Failed to parse audio: {str(e)}")
@@ -196,6 +210,7 @@ def parse_audio(file_path,s3_file_name):
 def parse_video(file_path,s3_file_name):
     """Parse video file by extracting and transcribing its audio"""
     try:
+        processed_chunks = []
         # Extract audio from video
         video = VideoFileClip(file_path)
         
@@ -243,7 +258,6 @@ def parse_video(file_path,s3_file_name):
                         metadata={
                             "source": s3_file_name,
                             "start_time": group_timestamps['from'],
-                            "end_time": group_timestamps['to'],
                             "url": url,
                             "mimetype": "video/",
                         }
@@ -274,6 +288,18 @@ def parse_video(file_path,s3_file_name):
                 )
                 vector_store.add_documents(documents=documents, ids=uuids)
                 print("Video transcription chunks successfully added to the vector store.")
+                # Prepare chunks info for return
+                for doc in documents:
+                    chunk_info = {
+                        'token_count': len(doc.page_content.split()),  # Approximate token count
+                        'mimetype': doc.metadata.get('mimetype', 'N/A'),
+                        'source': doc.metadata.get('source', 'N/A'),
+                        'url': doc.metadata.get('url', 'N/A'),
+                        'start_time': doc.metadata.get('start_time','N/A'),
+                        'vectorized': True
+                    }
+                processed_chunks.append(chunk_info)
+
             except Exception as e:
                 print(f"An error occurred while adding video chunks: {str(e)}")
                 
@@ -281,6 +307,8 @@ def parse_video(file_path,s3_file_name):
             # Clean up
             os.unlink(temp_audio_path)
             video.close()
+            
+        return processed_chunks
             
     except Exception as e:
         raise Exception(f"Failed to parse video: {str(e)}")
@@ -325,6 +353,17 @@ def parse_image(file_path,s3_file_name):
                 print("Image description successfully added to the vector store.")
             except Exception as e:
                 print(f"An error occurred while adding image description: {str(e)}")
+                
+            # Create chunks info for return
+            processed_chunks = [{
+                'token_count': len(doc.page_content.split()),
+                'mimetype': doc.metadata.get('mimetype', 'N/A'),
+                'source': doc.metadata.get('source', 'N/A'),
+                'url': doc.metadata.get('url', 'N/A'),
+                'image_url': doc.metadata.get('image_url', 'N/A'),
+                'vectorized': True
+            }]
+            return processed_chunks
                 
         except Exception as e:
             print(f"Failed to process image {filename}: {str(e)}")

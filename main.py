@@ -33,7 +33,9 @@ def upload_file():
         file.save(temp_path)
         
         # Check and parse the file based on its type
-        mime_type = parse_file(temp_path,s3_file_name)
+        parse_result = parse_file(temp_path,s3_file_name)
+        mime_type = parse_result['mime_type']
+        chunks = parse_result['chunks']
         
         message = "File parsed but not uploaded (unsupported type for storage)"
         # Only upload if it's a supported file type
@@ -52,6 +54,7 @@ def upload_file():
     return jsonify({
         "message": message,
         "s3_file_name": s3_file_name if mime_type in ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'] or mime_type.startswith(('audio/', 'video/')) else None,
+        "chunks": chunks
     }), 200
 
 if __name__ == '__main__':

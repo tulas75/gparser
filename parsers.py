@@ -102,7 +102,8 @@ def parse_pdf(file_path, s3_file_name):
                     'source': doc.metadata.get('source', 'N/A'),
                     'page': doc.metadata.get('page', 'N/A'),
                     'url': doc.metadata.get('url', 'N/A'),
-                    'image_url': doc.metadata.get('image_url', None)
+                    'image_url': doc.metadata.get('image_url', None),
+                    'vectorized': True
                 }
                 processed_chunks.append(chunk_info)
                 

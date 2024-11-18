@@ -66,6 +66,8 @@ if uploaded_file is not None:
                                 st.write(f"- URL: {chunk.get('url', 'N/A')}")
                                 if chunk.get('image_url'):
                                     st.write(f"- Image URL: {chunk['image_url']}")
+                                vectorized = chunk.get('vectorized', False)
+                                st.write(f"- Vectorized: {'✅' if vectorized else '❌'}")
                 else:
                     st.error(f"Upload failed: {response.json().get('error', 'Unknown error')}")
                 

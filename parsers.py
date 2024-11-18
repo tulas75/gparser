@@ -1,7 +1,6 @@
 import magic
 import os
 import openparse
-import os
 import json
 import uuid
 import base64
@@ -14,6 +13,17 @@ from moviepy.editor import VideoFileClip
 from langchain_core.documents import Document
 from vectemb import get_vector_store_pg
 from whisper import whisper_parse
+
+def get_pg_vector_store():
+    """Helper function to get PostgreSQL vector store with environment variables"""
+    return get_vector_store_pg(
+        pgdb=os.environ['PGDB'],
+        collection_name=os.environ['COLLECTION_NAME'],
+        pghost=os.environ['PGHOST'],
+        pgpwd=os.environ['PGPWD'],
+        pguser=os.environ['PGUSER'],
+        pgport=os.environ['PGPORT']
+    )
 
 def parse_pdf(file_path, s3_file_name):
     """Parse PDF file and extract text, images, and mixed content"""
@@ -83,14 +93,7 @@ def parse_pdf(file_path, s3_file_name):
         # Add error handling
         try:
             #vector_store = get_vector_store(namespace="testino",index_name="langchain-test-index")
-            vector_store = get_vector_store_pg(
-                pgdb=os.environ['PGDB'], 
-                collection_name=os.environ['COLLECTION_NAME'],
-                pghost=os.environ['PGHOST'],
-                pgpwd=os.environ['PGPWD'],
-                pguser=os.environ['PGUSER'],
-                pgport=os.environ['PGPORT']
-            )
+            vector_store = get_pg_vector_store()
             vector_store.add_documents(documents=documents, ids=uuids)
             print("Documents successfully added to the vector store.")
             
@@ -177,14 +180,7 @@ def parse_audio(file_path,s3_file_name):
 
         # Add to vector store
         try:
-            vector_store = get_vector_store_pg(
-                pgdb=os.environ['PGDB'], 
-                collection_name=os.environ['COLLECTION_NAME'],
-                pghost=os.environ['PGHOST'],
-                pgpwd=os.environ['PGPWD'],
-                pguser=os.environ['PGUSER'],
-                pgport=os.environ['PGPORT']
-            )
+            vector_store = get_pg_vector_store()
             vector_store.add_documents(documents=documents, ids=uuids)
             print("Audio transcription chunks successfully added to the vector store.")
             # Prepare chunks info for return
@@ -278,14 +274,7 @@ def parse_video(file_path,s3_file_name):
             # Add to vector store
             try:
                 #vector_store = get_vector_store(namespace="video", index_name="langchain-test-index")
-                vector_store = get_vector_store_pg(
-                    pgdb=os.environ['PGDB'], 
-                    collection_name=os.environ['COLLECTION_NAME'],
-                    pghost=os.environ['PGHOST'],
-                    pgpwd=os.environ['PGPWD'],
-                    pguser=os.environ['PGUSER'],
-                    pgport=os.environ['PGPORT']
-                )
+                vector_store = get_pg_vector_store()
                 vector_store.add_documents(documents=documents, ids=uuids)
                 print("Video transcription chunks successfully added to the vector store.")
                 # Prepare chunks info for return
